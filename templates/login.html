@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+    <h2>// AUTHENTICATION_REQUIRED</h2>
+    {% if error %}
+        <div class="error">>> ERROR: {{ error }}</div>
+    {% endif %}
+    <form method="POST">
+        <label>>> USERNAME:</label>
+        <input type="text" name="username" placeholder="Enter ID..." required>
+        <label>>> PASSWORD:</label>
+        <input type="password" name="password" placeholder="Enter Key..." required>
+        <button type="submit">>> INITIATE_LOGIN_SEQUENCE</button>
+    </form>
+{% endblock %}

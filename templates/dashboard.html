@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+    <h2>// WELCOME_STUDENT</h2>
+    <p>Access Level: {{ session.role | upper }}</p>
+    <p>Select a module from the navigation bar to proceed.</p>
+    
+    <div style="border: 1px dotted var(--neon-green); padding: 10px; margin-top: 20px;">
+        <h3>>> NOTIFICATIONS</h3>
+        <ul>
+            <li>[INFO] Exam results have been uploaded.</li>
+            <li>[WARN] System maintenance scheduled for 03:00 UTC.</li>
+        </ul>
+    </div>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+    <h2>// SYSTEM_FEEDBACK_LOOP</h2>
+    <p>Report bugs to the administrator. (HTML allowed for screenshots)</p>
+    
+    {% if error %} <div class="error">{{ error }}</div> {% endif %}
+    
+    <form method="POST">
+        <textarea name="message" rows="5" placeholder="Enter your report..."></textarea>
+        <button type="submit">>> TRANSMIT_DATA</button>
+    </form>
+    
+    <h3>>> RECENT_LOGS</h3>
+    <div id="logs">
+        {% for msg in messages %}
+            <div style="border-bottom: 1px solid #333; padding: 5px;">
+                > {{ msg['message'] | safe }}
+            </div>
+        {% endfor %}
+    </div>
+{% endblock %}
