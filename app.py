@@ -22,31 +22,30 @@ def close_connection(exception):
 def init_db():
     with app.app_context():
         db = get_db()
-        # Create Users Table
         db.execute('''CREATE TABLE IF NOT EXISTS users 
                      (id INTEGER PRIMARY KEY, username TEXT, password TEXT, role TEXT, bio TEXT)''')
-        # Create Feedback Table
         db.execute('''CREATE TABLE IF NOT EXISTS feedback 
                      (id INTEGER PRIMARY KEY, message TEXT)''')
         
-        # Check if empty, then add dummy data
         cur = db.execute('SELECT count(*) FROM users')
         if cur.fetchone()[0] == 0:
             db.execute("INSERT INTO users (username, password, role, bio) VALUES (?, ?, ?, ?)",
-                       ('admin', 'Sup3rS3cr3tP@ssw0rd!', 'admin', 'System Administrator - Do Not Touch'))
+                       ('admin', 'Sup3rS3cr3tP@ssw0rd!', 'admin', 'System Administrator - Flag 3: CTF{IDOR_MASTER_ACCESS_GRANTED}'))
             db.execute("INSERT INTO users (username, password, role, bio) VALUES (?, ?, ?, ?)",
                        ('john_doe', 'password123', 'student', 'Just a regular CS student.'))
             db.execute("INSERT INTO users (username, password, role, bio) VALUES (?, ?, ?, ?)",
                        ('alice_wonder', 'alice2024', 'student', 'I love cryptography!'))
             db.commit()
 
+# CRITICAL FIX FOR RENDER: Initialize DB outside the main block!
+init_db()
+
 # --- THE "AI TRAP" WAF ---
 def is_malicious(input_str):
     """
-    A basic WAF that blocks standard AI SQLi payloads.
-    Participants must use encoding or alternative SQL comments to bypass this.
+    Blocks standard lazy payloads. Participants must use comments (/*) to bypass.
     """
-    blacklist = [" OR ", " UNION ", "DROP ", "--", "/*"]
+    blacklist = [" OR ", " UNION ", "--", " DROP "]
     input_upper = input_str.upper()
     for bad in blacklist:
         if bad in input_upper:
@@ -54,13 +53,11 @@ def is_malicious(input_str):
     return False
 
 # --- ROUTES ---
-
 @app.route('/')
 def index():
     return redirect(url_for('login'))
 
-# VULNERABILITY 1: SQL Injection (Login Bypass) 
-# AI Trap: The 'is_malicious' check prevents lazy 'OR 1=1' attacks.
+# VULNERABILITY 1: SQL Injection (Login Bypass)
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     error = None
@@ -68,12 +65,9 @@ def login():
         username = request.form['username']
         password = request.form['password']
 
-        # The AI Trap: Block standard attacks
         if is_malicious(username) or is_malicious(password):
-            return render_template('login.html', error="⚠️ WAF BLOCKED: Malicious Pattern Detected.")
+            return render_template('login.html', error="⚠️ WAF BLOCKED: Standard SQL syntax detected. Stop relying on basic AI payloads.")
 
-        # The Vulnerability: String formatting allows injection if WAF is bypassed
-        # Hint: Try using ' # to comment out the rest
         query = f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
         
         try:
@@ -88,8 +82,7 @@ def login():
             else:
                 error = "Access Denied: Invalid Credentials."
         except Exception as e:
-            # Blind SQLi: Don't show the actual error to the user!
-            error = "Database Error: Transaction Failed."
+            error = "Database Error: Syntax Malformed."
 
     return render_template('login.html', error=error)
 
@@ -97,24 +90,28 @@ def login():
 def dashboard():
     if 'user_id' not in session:
         return redirect(url_for('login'))
-    return render_template('dashboard.html')
+    
+    # If they successfully hack the admin account, show them the flag!
+    admin_flag = None
+    if session.get('role') == 'admin':
+        admin_flag = "CTF{WAF_EVASION_EXPERT_99}"
+        
+    return render_template('dashboard.html', admin_flag=admin_flag)
 
-# VULNERABILITY 2: Insecure Direct Object Reference (IDOR) 
-# The 'id' parameter is visible and changeable.
+# VULNERABILITY 2: IDOR
 @app.route('/profile')
 def profile():
     if 'user_id' not in session:
         return redirect(url_for('login'))
     
-    user_id = request.args.get('id', session['user_id']) # Defaults to current user, but changeable
+    user_id = request.args.get('id', session['user_id']) 
     db = get_db()
-    # Vulnerability: No check if session['user_id'] == user_id
     cur = db.execute('SELECT username, role, bio FROM users WHERE id = ?', (user_id,))
     user = cur.fetchone()
     
     return render_template('profile.html', user=user)
 
-# VULNERABILITY 3: Stored XSS 
+# VULNERABILITY 3: Stored XSS
 @app.route('/feedback', methods=['GET', 'POST'])
 def feedback():
     if 'user_id' not in session:
@@ -123,10 +120,8 @@ def feedback():
     if request.method == 'POST':
         msg = request.form['message']
         
-        # AI Trap: AI usually tries <script>alert(1)</script>
-        # We strip <script> tags, forcing them to use <img onerror=...>
-        if "<script>" in msg:
-            return render_template('feedback.html', error="Nice try, script kiddy.")
+        if "<script>" in msg.lower():
+            return render_template('feedback.html', error="WAF BLOCKED: <script> tags are forbidden.")
             
         db = get_db()
         db.execute("INSERT INTO feedback (message) VALUES (?)", (msg,))
@@ -136,9 +131,6 @@ def feedback():
     db = get_db()
     messages = db.execute('SELECT message FROM feedback').fetchall()
     return render_template('feedback.html', messages=messages)
-
-# Initialize the database so Gunicorn (Render) catches it!
-init_db()
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
