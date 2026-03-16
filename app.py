@@ -137,6 +137,8 @@ def feedback():
     messages = db.execute('SELECT message FROM feedback').fetchall()
     return render_template('feedback.html', messages=messages)
 
+# Initialize the database so Gunicorn (Render) catches it!
+init_db()
+
 if __name__ == '__main__':
-    init_db()
     app.run(debug=True, port=5000)
