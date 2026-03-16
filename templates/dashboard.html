@@ -1,14 +1,21 @@
 {% extends "base.html" %}
 {% block content %}
-    <h2>// WELCOME_STUDENT</h2>
-    <p>Access Level: {{ session.role | upper }}</p>
-    <p>Select a module from the navigation bar to proceed.</p>
+    <h2>// WELCOME_USER</h2>
+    <p>Access Level: [ {{ session.role | upper }} ]</p>
     
-    <div style="border: 1px dotted var(--neon-green); padding: 10px; margin-top: 20px;">
-        <h3>>> NOTIFICATIONS</h3>
-        <ul>
-            <li>[INFO] Exam results have been uploaded.</li>
-            <li>[WARN] System maintenance scheduled for 03:00 UTC.</li>
-        </ul>
-    </div>
+    {% if admin_flag %}
+        <div class="flag-box">
+            <h3>⚠️ SYSTEM OVERRIDE SUCCESSFUL ⚠️</h3>
+            <p>Admin privileges granted via WAF evasion.</p>
+            <p><strong>FLAG 1: {{ admin_flag }}</strong></p>
+        </div>
+    {% else %}
+        <div style="border: 1px dotted var(--neon-green); padding: 10px; margin-top: 20px;">
+            <h3>>> NOTIFICATIONS</h3>
+            <ul>
+                <li>[INFO] Exam results have been uploaded to your profile.</li>
+                <li>[WARN] System administrator 'admin' is auditing database logs today.</li>
+            </ul>
+        </div>
+    {% endif %}
 {% endblock %}
