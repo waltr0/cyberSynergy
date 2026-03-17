@@ -1,14 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
-    <h2>// USER_PROFILE_DATA</h2>
-    
-    {% if user %}
-        <div style="background: rgba(0, 50, 0, 0.4); padding: 20px; border-left: 5px solid var(--neon-green);">
-            <p>>> <strong>USERNAME:</strong> {{ user['username'] }}</p>
-            <p>>> <strong>ROLE:</strong> {{ user['role'] }}</p>
-            <p>>> <strong>BIO:</strong> {{ user['bio'] }}</p>
-        </div>
-    {% else %}
-        <div class="error">>> ERROR: USER_RECORD_NOT_FOUND</div>
-    {% endif %}
+    <h1>// SYSTEM_PROFILE_DATA</h1>
+    <p style="color: #555;">[ INDEXING INTERNAL RECORDS ]</p>
+    <div style="border: 1px dashed #444; padding: 20px; background: rgba(0,0,0,0.5); text-align: left; font-size: 0.8rem; line-height: 1.8;">
+        User: NULL<br>
+        Clearance: 0<br>
+        Routing: DEPRECATED<br>
+        <br>
+        <span style="color: #880000;">ERR: Flag not found here. CTF{NICE_TRY_RABBIT_HOLE_1}</span>
+    </div>
 {% endblock %}
