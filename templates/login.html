@@ -1,16 +1,40 @@
 {% extends "base.html" %}
 {% block content %}
-    <h2>// AUTHENTICATION_REQUIRED</h2>
+    <h1>// IOT_DECEPTION_NODE_01</h1>
+    <p style="font-size: 0.7rem; color: #555;">Warning: Continuous Identity Verification Active.</p>
     
-    {% if error %}
-        <div class="error">>> {{ error }}</div>
-    {% endif %}
-    
-    <form method="POST">
-        <label>>> USERNAME:</label>
-        <input type="text" name="username" placeholder="Enter ID..." required>
-        <label>>> PASSWORD:</label>
-        <input type="password" name="password" placeholder="Enter Key..." required>
-        <button type="submit">>> INITIATE_LOGIN_SEQUENCE</button>
-    </form>
+    <input type="text" id="username" placeholder="ROOT_USER">
+    <input type="password" id="pin" placeholder="ACCESS_PIN">
+    <button onclick="attemptAuth()">ESTABLISH CONNECTION</button>
+    <div class="log" id="logOutput"></div>
+
+    <script>
+        function attemptAuth() {
+            const user = document.getElementById('username').value;
+            const pin = document.getElementById('pin').value;
+            const log = document.getElementById('logOutput');
+            
+            log.innerText = ">> Negotiating WAF handshake...";
+            
+            fetch('/api/v3/auth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: user, pin: pin })
+            })
+            .then(res => {
+                if(res.status === 403) return res.json().then(data => log.innerText = ">> " + data.error);
+                return res.json();
+            })
+            .then(data => {
+                if(data && data.flag_1) {
+                    log.innerHTML = `<span style="color:#0f0">>> ${data.message}</span><br>>> ${data.flag_1}`;
+                } else if (data && data.auth === "success") {
+                    window.location.href = "/dashboard";
+                } else if (data) {
+                    log.innerText = ">> ERR: Invalid Identity Pin.";
+                }
+            })
+            .catch(err => log.innerText = ">> Connection Terminated.");
+        }
+    </script>
 {% endblock %}
