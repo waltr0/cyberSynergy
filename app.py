@@ -62,6 +62,12 @@ def auth():
             "flag_1": "CTF{HONEYPOT_DECEPTION_TRAP_TRIGGERED}"
         })
         
+    # --- YOUR HOST BACKDOOR (Bypasses everything!) ---
+    if username == 'host_admin' and pin_attempt == '1234':
+        session['auth_level'] = 'admin'
+        return jsonify({"status": "processing_complete", "auth": "success"})
+    # -------------------------------------------------
+        
     # FLAG 2: THE WAF BYPASS 
     if request.headers.get('X-WAF-Debug-Bypass') != 'true':
         return jsonify({"error": "WAF BLOCK: Malformed Request. Secure Header Missing."}), 403
