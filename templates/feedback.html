@@ -1,21 +1,13 @@
 {% extends "base.html" %}
 {% block content %}
-    <h2>// SYSTEM_FEEDBACK_LOOP</h2>
-    <p>Report bugs to the administrator. (HTML is permitted for log formatting).</p>
+    <h1>// DIAGNOSTICS_MODULE</h1>
+    <p style="color: #555;">[ AWAITING INPUT ]</p>
     
-    {% if error %} <div class="error">{{ error }}</div> {% endif %}
+    <textarea placeholder="Enter system diagnostic codes..." style="width: 100%; height: 100px; background: #000; border: 1px solid #333; color: #0f0; padding: 10px; font-family: inherit; margin-bottom: 15px; box-sizing: border-box;"></textarea>
+    <button>SUBMIT DIAGNOSTICS</button>
     
-    <form method="POST">
-        <textarea name="message" rows="4" placeholder="Enter your report..."></textarea>
-        <button type="submit">>> TRANSMIT_DATA</button>
-    </form>
-    
-    <h3 style="margin-top: 30px;">>> RECENT_LOGS</h3>
-    <div id="logs" style="background: #050505; padding: 10px; border: 1px solid #333; height: 200px; overflow-y: auto;">
-        {% for msg in messages %}
-            <div style="border-bottom: 1px dashed #333; padding: 5px 0; margin-bottom: 5px;">
-                > {{ msg['message'] | safe }}
-            </div>
-        {% endfor %}
+    <div style="margin-top: 20px; color: #880000; font-size: 0.8rem;">
+        >> LOG: Feedback subsystem disconnected from main database.<br>
+        >> CTF{DISTRACTION_NODE_CLEARED_KEEP_DIGGING}
     </div>
 {% endblock %}
