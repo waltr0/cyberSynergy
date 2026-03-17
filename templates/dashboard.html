@@ -1,21 +1,115 @@
-{% extends "base.html" %}
-{% block content %}
-    <h2>// WELCOME_USER</h2>
-    <p>Access Level: [ {{ session.role | upper }} ]</p>
-    
-    {% if admin_flag %}
-        <div class="flag-box">
-            <h3>⚠️ SYSTEM OVERRIDE SUCCESSFUL ⚠️</h3>
-            <p>Admin privileges granted via WAF evasion.</p>
-            <p><strong>FLAG 1: {{ admin_flag }}</strong></p>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OMNICORP | Root Control</title>
+    <style>
+        body { background: #000; color: #0f0; font-family: monospace; padding: 40px; margin: 0; }
+        .warning-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(20,0,0,0.9); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9999; }
+        h1 { color: #f00; text-shadow: 0 0 20px #f00; letter-spacing: 5px; text-align: center; }
+        .hidden-ui { display: none; max-width: 800px; margin: 0 auto; border: 1px solid #0f0; padding: 30px; background: rgba(0,25,0,0.1); }
+        .panel { border: 1px dashed #0f0; padding: 20px; margin-top: 20px; }
+        a { color: #0ff; text-decoration: none; border-bottom: 1px dashed #0ff; }
+        a:hover { background: #0ff; color: #000; }
+        input, button { background: #000; border: 1px solid #0f0; color: #0f0; padding: 10px; font-family: inherit; margin-top: 10px;}
+        button { cursor: pointer; font-weight: bold; }
+        button:hover { background: #0f0; color: #000; }
+        .android-link { color: #00E676; font-size: 0.85rem; border: 1px solid #00E676; padding: 15px; margin-top: 20px; background: rgba(0, 230, 118, 0.05); }
+    </style>
+</head>
+<body>
+
+    <div class="warning-screen" id="biometric-lock">
+        <h1>>> BEHAVIORAL ANOMALY DETECTED <<</h1>
+        <p style="color: #aaa; font-size: 1.2rem; text-align: center; max-width: 600px;">
+            Analyzing continuous identity verification telemetry...<br><br>
+            Current cursor movement patterns and typing speed do not match the authorized Admin profile.
+        </p>
+        <div id="countdown" style="font-size: 3rem; color: #f00; margin-top: 20px;">1.50</div>
+    </div>
+
+    <div class="hidden-ui" id="core-ui">
+        <h2 style="color: #fff; border-bottom: 2px solid #0f0; padding-bottom: 10px;">// DECEPTION HONEYPOT NETWORK: MASTER NODE</h2>
+        
+        <div id="flag4-container" style="color: #0ff; margin-bottom: 20px; font-size: 1.2rem; font-weight: bold;"></div>
+
+        <div class="panel">
+            <h3>>> SYSTEM ARCHITECTURE</h3>
+            <p>Active Nodes: 404 Virtual Devices<br>Traffic Routing: Adaptive Masking</p>
+            <p>Firmware update required for deep-packet inspection protocols.</p>
+            <a href="/download/firmware">>> Download latest iot_node_firmware.wasm</a>
         </div>
-    {% else %}
-        <div style="border: 1px dotted var(--neon-green); padding: 10px; margin-top: 20px;">
-            <h3>>> NOTIFICATIONS</h3>
-            <ul>
-                <li>[INFO] Exam results have been uploaded to your profile.</li>
-                <li>[WARN] System administrator 'admin' is auditing database logs today.</li>
+
+        <div class="android-link">
+            <h3 style="margin-top: 0;">>> MOBILE COMPANION LINK SECURED</h3>
+            <p style="color: #ccc; margin-bottom: 5px;">Remote handling established via internal Android interface.</p>
+            <ul style="margin: 0; padding-left: 20px; line-height: 1.6;">
+                <li>Live Location Polling: [ACTIVE]</li>
+                <li>Remote Workstation Lock: [STANDBY]</li>
+                <li>Task Execution Feed: [ENCRYPTED]</li>
             </ul>
         </div>
-    {% endif %}
-{% endblock %}
+
+        <div class="panel" style="border-color: #f00;">
+            <h3 style="color: #f00;">>> ROOT OVERRIDE</h3>
+            <p style="color: #aaa;">Input cryptographic Master Key to seize total control of all Deception Nodes.</p>
+            <input type="text" id="masterKey" placeholder="0x..." style="width: 60%;">
+            <button onclick="executeOverride()">EXECUTE</button>
+            <div id="override-log" style="margin-top: 15px; color: #f00; font-weight: bold;"></div>
+        </div>
+    </div>
+
+    <script>
+        window.sessionStabilized = false;
+        let timeRemaining = 1.50;
+        
+        const timer = setInterval(() => {
+            if(window.sessionStabilized) {
+                clearInterval(timer);
+                return;
+            }
+            timeRemaining -= 0.01;
+            document.getElementById('countdown').innerText = timeRemaining.toFixed(2);
+            
+            if(timeRemaining <= 0) {
+                clearInterval(timer);
+                document.body.innerHTML = "<h1 style='color:red; margin-top:20vh; text-align:center;'>SESSION TERMINATED BY MAINFRAME</h1>";
+            }
+        }, 10);
+
+        setInterval(() => {
+            fetch('/api/v3/telemetry', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({}) 
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.script) {
+                    eval(data.script);
+                    document.getElementById('flag4-container').innerText = "SYSTEM STABILIZED. " + data.flag_4;
+                }
+            }).catch(e => {});
+        }, 500);
+
+        function executeOverride() {
+            const key = document.getElementById('masterKey').value;
+            fetch('/api/core_override', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ master_key: key })
+            })
+            .then(res => res.json())
+            .then(data => {
+                const log = document.getElementById('override-log');
+                if(data.flag_6) {
+                    log.innerHTML = `<span style="color:#0f0; font-size: 1.5rem;">>> CRITICAL ALERT: IOT NETWORK COMPROMISED <<<br>${data.flag_6}</span>`;
+                } else {
+                    log.innerText = ">> ACCESS DENIED: INVALID KEY CRYPTOGRAPHY.";
+                }
+            });
+        }
+    </script>
+</body>
+</html>
