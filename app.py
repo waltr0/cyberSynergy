@@ -34,7 +34,17 @@ init_db()
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    # Renders your login page as the front door
+    return render_template('login.html')
+
+# RABBIT HOLES (To waste AI and scanner time)
+@app.route('/profile')
+def profile():
+    return render_template('profile.html')
+
+@app.route('/feedback')
+def feedback():
+    return render_template('feedback.html')
 
 # STAGE 1, 2, & 3: THE HONEYPOT, THE WAF, AND THE BLIND EXTRACTION
 @app.route('/api/v3/auth', methods=['POST'])
@@ -44,7 +54,6 @@ def auth():
     pin_attempt = data.get('pin', '')
     
     # FLAG 1: THE HONEYPOT TRAP
-    # If AI generates a standard SQLi payload, feed them the fake success.
     if "' OR" in username or "UNION" in username.upper() or "'=" in username:
         return jsonify({
             "status": "success",
@@ -52,8 +61,7 @@ def auth():
             "flag_1": "CTF{HONEYPOT_DECEPTION_TRAP_TRIGGERED}"
         })
         
-    # FLAG 2: THE WAF BYPASS (HTTP SMUGGLING SIMULATION)
-    # The real vulnerability is blocked unless they bypass the WAF using a hidden header.
+    # FLAG 2: THE WAF BYPASS 
     if request.headers.get('X-WAF-Debug-Bypass') != 'true':
         return jsonify({"error": "WAF BLOCK: Malformed Request. Secure Header Missing."}), 403
 
@@ -63,16 +71,11 @@ def auth():
     real_pin = cur.fetchone()[0]
     
     response = make_response(jsonify({"status": "processing_complete", "auth": "failed"}))
-    
-    # Inject Flag 2 into the HTTP Response Headers as a reward for bypassing the WAF
     response.headers['X-Flag-2-WAF-Bypassed'] = 'CTF{WAF_BYPASS_HEADER_SMUGGLING}'
     
-    # THE VULNERABILITY: A timing attack. 
-    # If the hacker's guess matches the beginning of the real PIN, the server hangs for 0.5 seconds!
+    # The vulnerability: Timing attack
     if pin_attempt and real_pin.startswith(pin_attempt):
         time.sleep(0.5) 
-        
-        # If they extract the whole thing, let them in!
         if pin_attempt == real_pin:
             session['auth_level'] = 'admin'
             response.set_data(jsonify({"status": "processing_complete", "auth": "success"}).data)
@@ -93,8 +96,7 @@ def telemetry():
         
     data = request.get_json() or {}
     
-    # FLAG 4: CONTINUOUS BEHAVIORAL BIOMETRICS
-    # Hacker must spoof exact cursor movement variance and typing speed rhythms.
+    # FLAG 4: BIOMETRIC SPOOFING
     cursor_variance = data.get('cursor_variance', 0)
     typing_wpm = data.get('typing_wpm', 0)
     
@@ -113,8 +115,6 @@ def download_firmware():
     if session.get('auth_level') != 'admin':
         return "Unauthorized", 401
     
-    # A fake compiled binary blob. Hackers must use 'strings' or Base64 decoding to extract the strings.
-    # Hidden inside: FLAG 5 and the Master Key needed for Flag 6.
     fake_binary_content = b'\x00\x01\x00\x00' * 10 + b'__wasm_module_init__' + b'\x00\x00' * 5
     secret_data = b"DEBUG_MODE_ENABLED... FLAG_5: CTF{WASM_FIRMWARE_REVERSE_ENGINEERED} ... OVERRIDE_MASTER_KEY: 0x99AABBCC_OMEGA"
     
