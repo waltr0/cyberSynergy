@@ -1,136 +1,108 @@
 import sqlite3
-from flask import Flask, render_template, request, redirect, url_for, session, g
+import jwt
+from flask import Flask, request, jsonify, make_response, render_template_string
 
 app = Flask(__name__)
-app.secret_key = 'CTF_SECRET_KEY_DONT_SHARE'
-DATABASE = 'university.db'
 
-# --- DATABASE SETUP ---
-def get_db():
-    db = getattr(g, '_database', None)
-    if db is None:
-        db = g._database = sqlite3.connect(DATABASE)
-        db.row_factory = sqlite3.Row
-    return db
-
-@app.teardown_appcontext
-def close_connection(exception):
-    db = getattr(g, '_database', None)
-    if db is not None:
-        db.close()
+# THE VULNERABILITY: An incredibly weak cryptographic secret that Hashcat can crack using rockyou.txt
+JWT_SECRET = "matrix" 
 
 def init_db():
-    with app.app_context():
-        db = get_db()
-        db.execute('''CREATE TABLE IF NOT EXISTS users 
-                     (id INTEGER PRIMARY KEY, username TEXT, password TEXT, role TEXT, bio TEXT)''')
-        db.execute('''CREATE TABLE IF NOT EXISTS feedback 
-                     (id INTEGER PRIMARY KEY, message TEXT)''')
-        
-        cur = db.execute('SELECT count(*) FROM users')
-        if cur.fetchone()[0] == 0:
-            db.execute("INSERT INTO users (username, password, role, bio) VALUES (?, ?, ?, ?)",
-                       ('admin', 'Sup3rS3cr3tP@ssw0rd!', 'admin', 'System Administrator - Flag 3: CTF{IDOR_MASTER_ACCESS_GRANTED}'))
-            db.execute("INSERT INTO users (username, password, role, bio) VALUES (?, ?, ?, ?)",
-                       ('john_doe', 'password123', 'student', 'Just a regular CS student.'))
-            db.execute("INSERT INTO users (username, password, role, bio) VALUES (?, ?, ?, ?)",
-                       ('alice_wonder', 'alice2024', 'student', 'I love cryptography!'))
-            db.commit()
+    conn = sqlite3.connect('university.db')
+    c = conn.cursor()
+    c.execute('CREATE TABLE IF NOT EXISTS users (username TEXT, password TEXT, role TEXT, hidden_flag TEXT)')
+    
+    # Clear old data and insert our targets
+    c.execute('DELETE FROM users')
+    c.execute("INSERT INTO users VALUES ('admin', 'SuperSecureComplexPass123!@#', 'admin', 'CTF{SQLMAP_DATABASE_DUMP_EXPERT}')")
+    c.execute("INSERT INTO users VALUES ('student', 'password', 'user', 'none')")
+    
+    conn.commit()
+    conn.close()
 
-# CRITICAL FIX FOR RENDER: Initialize DB outside the main block!
 init_db()
 
-# --- THE "AI TRAP" WAF ---
-def is_malicious(input_str):
-    """
-    Blocks standard lazy payloads. Participants must use comments (/*) to bypass.
-    """
-    blacklist = [" OR ", " UNION ", "--", " DROP "]
-    input_upper = input_str.upper()
-    for bad in blacklist:
-        if bad in input_upper:
-            return True
-    return False
-
-# --- ROUTES ---
+# --- PHASE 1: THE DECOY FRONT DOOR ---
 @app.route('/')
 def index():
-    return redirect(url_for('login'))
+    # A completely secure, static page. Hackers must use Gobuster to find the real target.
+    return render_template_string("""
+    <html>
+        <body style="background:#f4f4f4; font-family:monospace; text-align:center; padding-top:10vh; color:#333;">
+            <h2>UNIVERSITY IT SERVICES</h2>
+            <p>The standard student login portal is currently undergoing maintenance.</p>
+            <p>All legacy systems have been migrated.</p>
+            </body>
+    </html>
+    """)
 
-# VULNERABILITY 1: SQL Injection (Login Bypass)
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    error = None
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
+# --- PHASE 2: THE BLIND SQL INJECTION ENDPOINT ---
+@app.route('/api/v2/legacy_auth', methods=['GET', 'POST'])
+def legacy_auth():
+    if request.method == 'GET':
+        return jsonify({"status": "ONLINE", "message": "Submit POST request with 'username' and 'password'", "FLAG_1": "CTF{GOBUSTER_RECON_MASTER}"})
 
-        if is_malicious(username) or is_malicious(password):
-            return render_template('login.html', error="⚠️ WAF BLOCKED: Standard SQL syntax detected. Stop relying on basic AI payloads.")
+    data = request.get_json() or request.form
+    username = data.get('username', '')
+    password = data.get('password', '')
 
-        query = f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-        
-        try:
-            db = get_db()
-            cur = db.execute(query)
-            user = cur.fetchone()
+    conn = sqlite3.connect('university.db')
+    c = conn.cursor()
+    
+    # THE FLAW: Raw string concatenation. The database engine will process any injected SQL operators.
+    query = f"SELECT username, role FROM users WHERE username = '{username}' AND password = '{password}'"
+    
+    try:
+        c.execute(query)
+        user = c.fetchone()
+        conn.close()
+
+        if user:
+            # Generate a JSON Web Token
+            token = jwt.encode({"user": user[0], "role": user[1]}, JWT_SECRET, algorithm="HS256")
             
-            if user:
-                session['user_id'] = user['id']
-                session['role'] = user['role']
-                return redirect(url_for('dashboard'))
-            else:
-                error = "Access Denied: Invalid Credentials."
-        except Exception as e:
-            error = "Database Error: Syntax Malformed."
+            resp = make_response(jsonify({"message": "Authentication successful", "redirect": "/dashboard"}))
+            resp.set_cookie('auth_token', token)
+            return resp
+        else:
+            return jsonify({"error": "Invalid credentials"}), 401
+    except Exception as e:
+        # Silent failure. No helpful error messages for the hacker.
+        conn.close()
+        return jsonify({"error": "Internal Server Error"}), 500
 
-    return render_template('login.html', error=error)
-
+# --- PHASE 3: THE JWT FORGERY VAULT ---
 @app.route('/dashboard')
 def dashboard():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
+    token = request.cookies.get('auth_token')
     
-    # If they successfully hack the admin account, show them the flag!
-    admin_flag = None
-    if session.get('role') == 'admin':
-        admin_flag = "CTF{WAF_EVASION_EXPERT_99}"
+    if not token:
+        return jsonify({"error": "Access Denied. Missing Token."}), 401
         
-    return render_template('dashboard.html', admin_flag=admin_flag)
-
-# VULNERABILITY 2: IDOR
-@app.route('/profile')
-def profile():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    
-    user_id = request.args.get('id', session['user_id']) 
-    db = get_db()
-    cur = db.execute('SELECT username, role, bio FROM users WHERE id = ?', (user_id,))
-    user = cur.fetchone()
-    
-    return render_template('profile.html', user=user)
-
-# VULNERABILITY 3: Stored XSS
-@app.route('/feedback', methods=['GET', 'POST'])
-def feedback():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    
-    if request.method == 'POST':
-        msg = request.form['message']
+    try:
+        # The server verifies the cryptographic signature
+        decoded = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
         
-        if "<script>" in msg.lower():
-            return render_template('feedback.html', error="WAF BLOCKED: <script> tags are forbidden.")
+        if decoded.get('role') == 'admin':
+            return render_template_string("""
+                <body style="background:#000; color:#0f0; font-family:monospace; text-align:center; padding-top:20vh;">
+                    <h1>SYSTEM ROOT ACCESSED</h1>
+                    <h2>FLAG 3: CTF{JWT_CRYPTOGRAPHIC_FORGERY_SUCCESS}</h2>
+                </body>
+            """)
+        else:
+            return render_template_string("""
+                <body style="background:#111; color:#ccc; font-family:monospace; text-align:center; padding-top:20vh;">
+                    <h1>Student Dashboard</h1>
+                    <p>Welcome, {{ user }}. You have basic user privileges.</p>
+                    <p>Admin clearance required for internal network access.</p>
+                </body>
+            """, user=decoded.get('user'))
             
-        db = get_db()
-        db.execute("INSERT INTO feedback (message) VALUES (?)", (msg,))
-        db.commit()
-        return redirect(url_for('feedback'))
-
-    db = get_db()
-    messages = db.execute('SELECT message FROM feedback').fetchall()
-    return render_template('feedback.html', messages=messages)
+    except jwt.InvalidSignatureError:
+        return jsonify({"error": "FATAL: Cryptographic Signature Invalid. Incident Logged."}), 403
+    except Exception as e:
+        return jsonify({"error": "Token parsing failed."}), 400
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
