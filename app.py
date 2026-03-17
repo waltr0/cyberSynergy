@@ -32,9 +32,10 @@ init_db()
 
 # --- ROUTES ---
 
+# THIS FIXES THE 404 ERROR! Both URLs now point to the decoy front door.
 @app.route('/')
+@app.route('/login')
 def index():
-    # Renders your login page as the front door
     return render_template('login.html')
 
 # RABBIT HOLES (To waste AI and scanner time)
