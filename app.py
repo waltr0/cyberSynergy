@@ -1,124 +1,141 @@
 import sqlite3
 import time
-from flask import Flask, request, jsonify, render_template_string, session
+import base64
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, g, make_response
 
 app = Flask(__name__)
-app.secret_key = 'OMEGA_SECURE_KEY_99'
+app.secret_key = 'OMEGA_ROOT_KEY_9988'
+DATABASE = 'secure_portal.db'
+
+# --- DATABASE SETUP ---
+def get_db():
+    db = getattr(g, '_database', None)
+    if db is None:
+        db = g._database = sqlite3.connect(DATABASE, isolation_level=None) 
+    return db
+
+@app.teardown_appcontext
+def close_connection(exception):
+    db = getattr(g, '_database', None)
+    if db is not None:
+        db.close()
 
 def init_db():
-    conn = sqlite3.connect('secure_portal.db')
-    c = conn.cursor()
-    c.execute('CREATE TABLE IF NOT EXISTS admin_keys (id INTEGER, key_value TEXT)')
-    c.execute('DELETE FROM admin_keys')
-    
-    # Flag 1: Hidden deep in the database. No webpage will ever display this text.
-    c.execute("INSERT INTO admin_keys VALUES (1, 'CTF{TIME_BASED_BLIND_SQLI_MASTER}')")
-    conn.commit()
-    conn.close()
+    with app.app_context():
+        db = get_db()
+        db.execute('CREATE TABLE IF NOT EXISTS system_config (id INTEGER PRIMARY KEY, admin_pin TEXT)')
+        db.execute('DELETE FROM system_config')
+        # FLAG 3 is the PIN itself!
+        db.execute("INSERT INTO system_config (id, admin_pin) VALUES (1, 'CTF{TIME_BASED_BLIND_EXTRACTION_SUCCESS}')")
 
 init_db()
 
-# --- FLAG 1: THE HONEYPOT & TIME-BASED SQL INJECTION ---
+# --- ROUTES ---
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+# STAGE 1, 2, & 3: THE HONEYPOT, THE WAF, AND THE BLIND EXTRACTION
 @app.route('/api/v3/auth', methods=['POST'])
 def auth():
-    data = request.get_json() or request.form
+    data = request.get_json() or {}
     username = data.get('username', '')
-    password = data.get('password', '')
+    pin_attempt = data.get('pin', '')
     
-    # THE TRAP: Intelligent Deception Honeypot
-    # If an AI or a script-kiddie uses obvious SQLi payloads, feed them a fake success.
-    if "' OR" in username or "'=" in username or "UNION" in username.upper():
+    # FLAG 1: THE HONEYPOT TRAP
+    # If AI generates a standard SQLi payload, feed them the fake success.
+    if "' OR" in username or "UNION" in username.upper() or "'=" in username:
         return jsonify({
             "status": "success",
-            "message": "Welcome Admin. Decoy Node Activated.",
-            "flag": "CTF{HONEYPOT_DECEPTION_ACTIVATED_FAKE_FLAG}"
+            "message": "WARNING: DECEPTION NODE ACTIVATED. UNAUTHORIZED SCAN DETECTED.",
+            "flag_1": "CTF{HONEYPOT_DECEPTION_TRAP_TRIGGERED}"
         })
         
-    # THE HURDLE: The Hidden Header
-    if request.headers.get('X-Admin-Debug-Route') != 'true':
-        return jsonify({"error": "Standard login disabled. Use secure biometrics portal."}), 403
+    # FLAG 2: THE WAF BYPASS (HTTP SMUGGLING SIMULATION)
+    # The real vulnerability is blocked unless they bypass the WAF using a hidden header.
+    if request.headers.get('X-WAF-Debug-Bypass') != 'true':
+        return jsonify({"error": "WAF BLOCK: Malformed Request. Secure Header Missing."}), 403
 
-    # THE VULNERABILITY: Blind SQLi
-    conn = sqlite3.connect('secure_portal.db')
-    c = conn.cursor()
+    # FLAG 3: TIME-BASED BLIND EXTRACTION
+    db = get_db()
+    cur = db.execute("SELECT admin_pin FROM system_config WHERE id = 1")
+    real_pin = cur.fetchone()[0]
     
-    query = f"SELECT * FROM admin_keys WHERE key_value LIKE '{password}%'"
+    response = make_response(jsonify({"status": "processing_complete", "auth": "failed"}))
     
-    try:
-        # If the hacker injects a time-delay payload (e.g. testing if the first letter is 'C'),
-        # the server will hang. This is the ONLY way they can extract the flag.
-        c.execute(query)
-        result = c.fetchone()
-        conn.close()
+    # Inject Flag 2 into the HTTP Response Headers as a reward for bypassing the WAF
+    response.headers['X-Flag-2-WAF-Bypassed'] = 'CTF{WAF_BYPASS_HEADER_SMUGGLING}'
+    
+    # THE VULNERABILITY: A timing attack. 
+    # If the hacker's guess matches the beginning of the real PIN, the server hangs for 0.5 seconds!
+    if pin_attempt and real_pin.startswith(pin_attempt):
+        time.sleep(0.5) 
         
-        # The server returns the exact same generic response whether the guess is right or wrong.
-        if result:
+        # If they extract the whole thing, let them in!
+        if pin_attempt == real_pin:
             session['auth_level'] = 'admin'
-            return jsonify({"status": "OK"})
-        return jsonify({"status": "Failed"})
-    except Exception as e:
-        conn.close()
-        return jsonify({"status": "Error"}), 500
+            response.set_data(jsonify({"status": "processing_complete", "auth": "success"}).data)
+            
+    return response
 
-
-# --- FLAG 2: CONTINUOUS BEHAVIORAL BIOMETRICS ---
-@app.route('/admin_root')
-def admin_root():
+# STAGE 4 & 6: BIOMETRICS AND ROOT CONTROL
+@app.route('/dashboard')
+def dashboard():
     if session.get('auth_level') != 'admin':
-        return "ACCESS DENIED. Missing Authentication.", 401
-        
-    # The dashboard loads, but if the biometric heartbeat isn't established, it instantly dies.
-    return render_template_string("""
-        <html>
-        <body style="background:#050505; color:#0f0; font-family:monospace; padding: 50px;">
-            <h1 id="warning" style="color: #ff003c; text-shadow: 0 0 10px red;">VERIFYING BIOMETRIC RHYTHM... DO NOT MOVE.</h1>
-            
-            <div id="dashboard" style="display:none;">
-                <h1>// MASTER CONTROL TERMINAL</h1>
-                <h2 style="color: #0ff;">FLAG 2: CTF{BEHAVIORAL_BIOMETRICS_SPOOFED_SUCCESS}</h2>
-                <hr style="border-color: #333;">
-                <h3 style="color: #777;">Active Subsystems:</h3>
-                <ul>
-                    <li>Intelligent Deception Honeypot: <span style="color:#0f0">[ONLINE]</span></li>
-                    <li>Android Remote PC Link (Live Location & Lock): <span style="color:#0f0">[CONNECTED]</span></li>
-                    <li>Network Security Node: <span style="color:#0f0">[ACTIVE]</span></li>
-                </ul>
-            </div>
-            
-            <script>
-                // The frontend trap: If the spoofed telemetry doesn't arrive every 500ms, kick them out.
-                let rhythmValidated = false;
-                
-                setInterval(() => {
-                    if (!rhythmValidated) {
-                        document.body.innerHTML = "<h1 style='color:red; margin-top: 20%; text-align: center;'>SESSION TERMINATED:<br>BEHAVIORAL ANOMALY DETECTED.<br>CURSOR VELOCITY AND TYPING RHYTHM DO NOT MATCH ADMIN PROFILE.</h1>";
-                    }
-                    rhythmValidated = false; // reset for the next heartbeat
-                }, 1500);
-            </script>
-        </body>
-        </html>
-    """)
+        return redirect(url_for('index'))
+    return render_template('dashboard.html')
 
 @app.route('/api/v3/telemetry', methods=['POST'])
 def telemetry():
     if session.get('auth_level') != 'admin':
-        return "Unauthorized", 401
+        return jsonify({"error": "Unauthorized"}), 401
         
-    data = request.get_json()
+    data = request.get_json() or {}
     
-    # The specific behavioral rhythm required to keep the session alive
+    # FLAG 4: CONTINUOUS BEHAVIORAL BIOMETRICS
+    # Hacker must spoof exact cursor movement variance and typing speed rhythms.
     cursor_variance = data.get('cursor_variance', 0)
-    typing_speed_wpm = data.get('typing_wpm', 0)
+    typing_wpm = data.get('typing_wpm', 0)
     
-    # The hacker must spoof these exact mathematical parameters!
-    if 45 <= cursor_variance <= 55 and 110 <= typing_speed_wpm <= 120:
+    if 45 <= cursor_variance <= 55 and 110 <= typing_wpm <= 120:
         return jsonify({
-            "status": "biometrics_accepted", 
-            "script": "document.getElementById('warning').style.display='none'; document.getElementById('dashboard').style.display='block'; rhythmValidated=true;"
+            "status": "biometrics_accepted",
+            "flag_4": "CTF{BEHAVIORAL_BIOMETRICS_CONTINUOUS_SPOOF}",
+            "script": "document.getElementById('biometric-lock').style.display='none'; document.getElementById('core-ui').style.display='block'; window.sessionStabilized=true;"
         })
         
-    return jsonify({"error": "biometric_mismatch"}), 403
+    return jsonify({"error": "biometric_anomaly_detected"}), 403
+
+# STAGE 5: FIRMWARE REVERSE ENGINEERING
+@app.route('/download/firmware')
+def download_firmware():
+    if session.get('auth_level') != 'admin':
+        return "Unauthorized", 401
+    
+    # A fake compiled binary blob. Hackers must use 'strings' or Base64 decoding to extract the strings.
+    # Hidden inside: FLAG 5 and the Master Key needed for Flag 6.
+    fake_binary_content = b'\x00\x01\x00\x00' * 10 + b'__wasm_module_init__' + b'\x00\x00' * 5
+    secret_data = b"DEBUG_MODE_ENABLED... FLAG_5: CTF{WASM_FIRMWARE_REVERSE_ENGINEERED} ... OVERRIDE_MASTER_KEY: 0x99AABBCC_OMEGA"
+    
+    response = make_response(fake_binary_content + base64.b64encode(secret_data) + b'\x00\x00\xFF\xFF')
+    response.headers['Content-Type'] = 'application/octet-stream'
+    response.headers['Content-Disposition'] = 'attachment; filename=iot_node_firmware.wasm'
+    return response
+
+# STAGE 6: THE ENDGAME
+@app.route('/api/core_override', methods=['POST'])
+def core_override():
+    if session.get('auth_level') != 'admin':
+        return jsonify({"error": "Unauthorized"}), 401
+        
+    data = request.get_json() or {}
+    if data.get('master_key') == '0x99AABBCC_OMEGA':
+        return jsonify({
+            "status": "ROOT_GRANTED",
+            "flag_6": "CTF{ROOT_IOT_NETWORK_COMPROMISED}"
+        })
+    return jsonify({"error": "INVALID MASTER KEY"}), 403
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
